@@ -84,6 +84,8 @@ As with $r^2$, this distribution is somewhat skewed and has some outliers.
 
 The point of this is not to say you should always use the bootstrap -- it's possible to establish "large sample" distributions for strange parameters / values / summaries in a lot of cases, and those are great to have. But it is helpful to know that there's a way to do inference even in tough cases. 
 
+
+
 ### Problem 2
 
 ```{r}
@@ -92,7 +94,7 @@ read_csv("./data/homicide-data.csv") %>%
   janitor::clean_names() %>% 
   mutate(
     city_state = str_c(city, ", ", state),
-    solved = ifelse(disposition == "Closed by arrest", 1, 0)
+    resolved = ifelse(disposition == "Closed by arrest", 1, 0)
     ) %>%
   filter(!city_state == "Dallas, Tx", !city_state == "Phoenix, AZ", !city_state == "Kansas City, MO", !city_state == "Tulsa, AL", !victim_age == "Unknown") %>% 
     mutate(victim_age = as.numeric(victim_age)) %>% 
@@ -101,3 +103,25 @@ read_csv("./data/homicide-data.csv") %>%
 
 In the code chunk above, I used the `homocide-data` database to create a dataframe, added the `city_state` variable, removed Tulsa, Kansas City, Phoenix, and Dallas using `filter()` function, created a new variable `solved` to post whether a case was solved or not, with 1 showing solved, and 0 showing not. The `victim_age` column was converted to numerical vector after tidy of unknown variables. Lastly, Black and White races were filtered.
 
+```{r}
+fit_logistic = 
+  homocide_df %>% 
+  filter(city_state == "Baltimore, MD") %>% 
+  mutate(victim_sex = fct_relevel(victim_sex, "Male")) %>% 
+  glm(resolved ~ victim_age + victim_race + victim_sex, data = ., family = binomial()) 
+```
+
+In the code chunk above, I filtered out Baltimore, MD from `city_state` variable. I then used the `glm` function to fit a logistic regression with resolved vs unresolved as the outcome and victim, age, sex, and race as predictors. The output of the model was saved as an object in `fit_logistic`. 
+
+```{r}
+fit_logistic %>% 
+  broom::tidy() %>% 
+  mutate(OR = exp(estimate)) %>%
+  mutate(
+    ci_lower = exp(estimate-1.96*std.error),
+    ci_upper = exp(estimate+1.96*std.error)
+  ) %>% 
+  knitr::kable(digits = 3)
+```
+
+Above, I used the `broom::tidy` package to tidy the object, and obtained OR based on the estimate, as well as the confidence intervals. Based on the results, we can tell that female victims had a lower likelihood of having their case resolved compared to male victims when keeping all other variables fixed.
