@@ -135,7 +135,17 @@ homocide_df %>%
     results = map(models, broom::tidy, conf.int = TRUE)
   ) %>% 
   select(-data, -models) %>% 
-  unnest(results)
+  unnest(results) %>% 
+  mutate(
+    OR = exp(estimate),
+    CI = conf.high - conf.low) %>% 
+  filter(term == "victim_sexMale") %>% 
+  arrange(OR)
 
+city_glm %>% 
+  ggplot(aes(x = OR, y = CI, color = city_state)) +
+  geom_point()
 ```
+
+Based on the code chunk above, we used the `purrr::map` function to calculate the OR and CI based on the previous code chunk on the cities in the dataset. When organized by OR, we can see that Stockton, CA had the highest likelihood of having their case resolved if the victim was male, and New York, NY had the least likelihood of having the case resolved if the victim was male among those who identify as either black or white. Lastly, we used `ggplot()` to map out CI and OR among different cities, coding them by their color.
 
