@@ -149,3 +149,59 @@ city_glm %>%
 
 Based on the code chunk above, we used the `purrr::map` function to calculate the OR and CI based on the previous code chunk on the cities in the dataset. When organized by OR, we can see that Stockton, CA had the highest likelihood of having their case resolved if the victim was male, and New York, NY had the least likelihood of having the case resolved if the victim was male among those who identify as either black or white. Lastly, we used `ggplot()` to map out CI and OR among different cities, coding them by their color.
 
+
+### Problem 3
+
+```{r}
+weight_df = 
+read.csv("./data/birthweight.csv") %>% 
+  janitor::clean_names() %>% 
+  mutate(
+   frace = fct_infreq(as.character(frace)),
+   mrace = fct_infreq(as.character(mrace)),
+   babysex = fct_infreq(as.character(babysex))
+  ) %>% 
+  filter(!frace == "8", !frace == "9", !mrace == "8") %>% 
+  drop_na()
+
+fit = lm(bwt ~ babysex + fincome + frace + ppbmi + smoken, data = weight_df)
+
+fit %>% 
+  broom::tidy() %>% 
+  mutate(
+    term = str_replace(term, "frace2", "frace: Black"),
+    term = str_replace(term, "frace3", "frace: Asian"),
+    term = str_replace(term, "frace4", "frace: PR")
+    ) %>% 
+  select(term, estimate, p.value) %>% 
+  knitr::kable(digits = 3)
+```
+
+Above, I imported and tidied the `birthweight.csv` file. Paternal races were recategorized as a factor, and "other" or "unknown" values were filtered out. Subsequently, a `fit` model was developed for baby weight on birth based on baby gender, family income, race, maternal BMI, and smoking status. 
+
+```{r}
+weight_df %>% 
+  modelr::add_residuals(fit) %>% 
+  ggplot(aes(x = babysex, y = resid)) + geom_violin()
+
+weight_df %>% 
+  modelr::add_residuals(fit) %>% 
+  ggplot(aes(x = ppbmi, y = resid)) + geom_violin()
+
+weight_df %>% 
+  modelr::add_residuals(fit) %>% 
+  ggplot(aes(x = smoken, y = resid)) + geom_violin()
+
+weight_df %>% 
+  modelr::add_residuals(fit) %>% 
+  ggplot(aes(x = frace, y = resid)) + geom_violin()
+
+modelr::add_predictions(weight_df, fit)
+```
+
+In the above portion, we used the `modelr::add_residuals` function to evaluate residuals distribution on the basis of potential birth weight predictors. For example, we see that baby gender, average number of cigarettes per day during pregnancy by mom, and mother's pre-pregnancy BMI include outliers on the violin plot. We use the hypothesis testing method below:
+
+```{r}
+
+```
+
