@@ -50,7 +50,7 @@ weather_df =
 
 ```{r}
 weather_df %>% 
-  modelr::bootstrap(n = 50) %>% 
+  modelr::bootstrap(n = 5000) %>% 
   mutate(
     models = map(strap, ~lm(tmax ~ tmin, data = .x) ),
     results = map(models, broom::glance)) %>% 
@@ -65,7 +65,7 @@ We can produce a distribution for $\log(\beta_0 * \beta1)$ using a similar appro
 
 ```{r}
 weather_df %>% 
-  modelr::bootstrap(n = 50) %>% 
+  modelr::bootstrap(n = 5000) %>% 
   mutate(
     models = map(strap, ~lm(tmax ~ tmin, data = .x) ),
     results = map(models, broom::tidy)) %>% 
@@ -164,7 +164,7 @@ read.csv("./data/birthweight.csv") %>%
   filter(!frace == "8", !frace == "9", !mrace == "8") %>% 
   drop_na()
 
-fit = lm(bwt ~ babysex + fincome + frace + ppbmi + smoken, data = weight_df)
+fit = lm(bwt ~ babysex + frace + mrace, data = weight_df)
 
 fit %>% 
   broom::tidy() %>% 
@@ -186,11 +186,7 @@ weight_df %>%
 
 weight_df %>% 
   modelr::add_residuals(fit) %>% 
-  ggplot(aes(x = ppbmi, y = resid)) + geom_violin()
-
-weight_df %>% 
-  modelr::add_residuals(fit) %>% 
-  ggplot(aes(x = smoken, y = resid)) + geom_violin()
+  ggplot(aes(x = mrace, y = resid)) + geom_violin()
 
 weight_df %>% 
   modelr::add_residuals(fit) %>% 
@@ -199,9 +195,69 @@ weight_df %>%
 modelr::add_predictions(weight_df, fit)
 ```
 
-In the above portion, we used the `modelr::add_residuals` function to evaluate residuals distribution on the basis of potential birth weight predictors. For example, we see that baby gender, average number of cigarettes per day during pregnancy by mom, and mother's pre-pregnancy BMI include outliers on the violin plot. We use the hypothesis testing method below:
+In the above portion, we used the `modelr::add_residuals` function to evaluate residuals distribution on the basis of potential birth weight predictors. For example, we see that baby gender, paternal ethnicity, and maternal ethnicity include outliers on the violin plot. There is less outliers noted among Asian paternal ethnicities. We use the hypothesis testing method below:
 
 ```{r}
+fit_null = lm(bwt ~ babysex + frace, data = weight_df)
+fit_alt = lm(bwt ~ babysex + frace + mrace, data = weight_df)
 
+anova(fit_null, fit_alt) %>% broom::tidy()
 ```
 
+From the hypothesis test above, we can see that maternal race is a statistically significant predictor of baby birthweight.
+
+```{r}
+fit_null = lm(bwt ~ babysex + mrace, data = weight_df)
+fit_alt = lm(bwt ~ babysex + frace + mrace, data = weight_df)
+
+anova(fit_null, fit_alt) %>% broom::tidy()
+```
+
+From the hypothesis test above, we can see that paternal race is not a significant predictor of baby birthweight.
+
+```{r}
+fit_null = lm(bwt ~ mrace + frace, data = weight_df)
+fit_alt = lm(bwt ~ babysex + frace + mrace, data = weight_df)
+
+anova(fit_null, fit_alt) %>% broom::tidy()
+```
+
+From the hypothesis test above, we can see that baby gender is a statistically significant predictor of baby birthweight.
+
+```{r}
+weight_cv = 
+  crossv_mc(weight_df, 100) %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  )
+
+weight_cv =
+  weight_cv %>% 
+  mutate(
+    bwt_model_me = map(train, ~lm(bwt ~ babysex + frace + mrace, data = .x)),
+    bwt_model_two = map(train, ~lm(bwt ~ blength + gaweeks, data = .x)),
+    bwt_model_three = map(train, ~lm(bwt ~ bhead + blength + babysex + bhead*blength + bhead*babysex + blength*babysex + bhead*blength*babysex, data = .x))
+  ) %>%
+  mutate(
+    rmse_mode_me = map2_dbl(bwt_model_me, test, ~rmse(model = .x, data = .y)),
+    rmse_model_two = map2_dbl(bwt_model_two, test, ~rmse(model = .x, data = .y)),
+    rmse_model_three = map2_dbl(bwt_model_three, test, ~rmse(model = .x, data = .y))
+  )
+```
+
+In the above code chunk, I introduced the `weight_cv` object to hold the `crossv_mc()` results. Then I introduced my model, to be compared to the other two requested models, namely one using length at birth and gestational age as predictors, and the other using head circumference, length, and sex, including interactions among all three variables. Subsequently the standard error preduction values were introduced.
+
+```{r}
+weight_cv %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
+```
+
+In the above code chunk, the results of the model comparisons were further tidied to be showcased as a violin plot. We can see that model two and model three proposed are roughly similar, without many outliers. It appears that the distribution of the model I chose earlier has a normalized distribution, and may serve as a good predictor of birth weight.
